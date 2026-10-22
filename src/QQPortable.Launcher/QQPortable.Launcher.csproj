@@ -4,6 +4,7 @@
     <TargetFramework>net48</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms>
     <LangVersion>latest</LangVersion>
+    <Version>0.1.2</Version>
     <PlatformTarget>AnyCPU</PlatformTarget>
     <Prefer32Bit>false</Prefer32Bit>
     <ApplicationIcon>..\..\assets\launcher.ico</ApplicationIcon>

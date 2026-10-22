@@ -4,9 +4,11 @@
     <TargetFramework>net48</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms>
     <LangVersion>latest</LangVersion>
+    <Version>0.1.2</Version>
     <PlatformTarget>AnyCPU</PlatformTarget>
     <Prefer32Bit>false</Prefer32Bit>
     <ApplicationIcon>..\..\assets\launcher.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
     <AssemblyName>QQPortable.Installer</AssemblyName>
     <RootNamespace>QQPortable.Installer</RootNamespace>
   </PropertyGroup>
@@ -18,6 +20,7 @@
     <Reference Include="Microsoft.CSharp" />
   </ItemGroup>
   <ItemGroup>
+    <EmbeddedResource Include="..\..\assets\launcher.ico" LogicalName="launcher.ico" />
     <EmbeddedResource Include="Assets\launcher\QQPortable.exe" LogicalName="QQPortable.exe" />
     <EmbeddedResource Include="Assets\launcher\NapCatWinBootMain.exe" LogicalName="NapCatWinBootMain.exe" />
     <EmbeddedResource Include="Assets\launcher\NapCatWinBootHook.dll" LogicalName="NapCatWinBootHook.dll" />

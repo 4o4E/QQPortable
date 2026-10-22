@@ -67,7 +67,7 @@ namespace QQPortable.Launcher
                 Environment.SetEnvironmentVariable("NAPCAT_LOAD_PATH", loadScript, EnvironmentVariableTarget.Process);
 
                 string bootArguments = "\"" + qqExe + "\" \"" + hookDll + "\"";
-                StartHidden(bootExe, bootArguments, root);
+                BootstrapSession.Run(bootExe, bootArguments, root);
             }
             catch (Exception error)
             {
@@ -149,14 +149,6 @@ namespace QQPortable.Launcher
             return null;
         }
 
-        private static void StartHidden(string fileName, string arguments, string workingDirectory)
-        {
-            ProcessStartInfo info = new ProcessStartInfo(fileName, arguments);
-            info.WorkingDirectory = workingDirectory;
-            info.UseShellExecute = false;
-            info.CreateNoWindow = true;
-            Process.Start(info);
-        }
 
         private static void RequireFile(string path)
         {

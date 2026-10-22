@@ -36,9 +36,13 @@ QQPortable.exe
   -> write Launcher\runtime\loadLiteLoader.js
   -> set NAPCAT_PATCH_PACKAGE / NAPCAT_LOAD_PATH
   -> start Launcher\NapCatWinBootMain.exe <QQ.exe> <Hook.dll>
+  -> supervise this session until QQ client processes exit
+  -> terminate remaining bootstrap/console helpers in this session
 ```
 
 The launcher is a `WinExe` targeting .NET Framework 4.8. It has no script files and no console window.
+
+The bootstrap is created suspended and assigned to a Windows Job before resuming, so its descendants belong to this session from creation. Job creation notifications identify QQ clients; registered waits on their process handles report actual termination without polling. Job exit notifications alone are insufficient because outstanding process handles can delay them. Once all tracked QQ clients have terminated, the launcher ends the remaining Job members and waits for the Job to become empty. Console hosts and crash handlers do not keep the session alive. Hiding QQ to the tray does not terminate its process and does not trigger cleanup.
 
 ## Installer
 
@@ -67,10 +71,12 @@ The patcher fails loudly if a selected LiteLoader version does not match these p
 
 ## Catalog
 
-- QQ: `a1515333102/QQ-Releases` GitHub releases; filter x64 `.exe` assets.
+- QQ: `a1515333102/QQ-Releases` and `Rodert/qq-versions` GitHub releases; filter x64 `.exe` assets and merge duplicate versions.
 - LiteLoader: `LiteLoaderQQNT/LiteLoaderQQNT` GitHub releases; use `.zip` assets.
 
-Downloads use GitHub API asset URLs with `Accept: application/octet-stream`, because direct `github.com` release URLs may be unreachable while `api.github.com` works.
+The catalog first requests `api.github.com` release JSON, optionally authenticated by `GITHUB_TOKEN` or `GH_TOKEN`. If the API is rate limited, rejects the request, or cannot be reached, it falls back to `releases.atom` plus direct `github.com` release download URLs. The fallback lists the latest Atom entries rather than every historical release.
+
+API catalog downloads use asset URLs with `Accept: application/octet-stream`. Publish-page fallback downloads use direct release URLs, so loading the catalog does not consume API quota.
 
 ## Build order
 

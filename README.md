@@ -68,9 +68,13 @@ src\QQPortable.Installer\bin\Release\net48\QQPortable.Installer.exe
 安装器启动后：
 
 1. 选择目标目录，目标必须为空；不会修改现有安装。
-2. 选择 QQ 版本，列表来自 [a1515333102/QQ-Releases](https://github.com/a1515333102/QQ-Releases)。
+2. 选择 QQ 版本，列表合并自 [a1515333102/QQ-Releases](https://github.com/a1515333102/QQ-Releases) 和 [Rodert/qq-versions](https://github.com/Rodert/qq-versions)。
 3. 选择 LiteLoader 版本，列表来自 [LiteLoaderQQNT/LiteLoaderQQNT](https://github.com/LiteLoaderQQNT/LiteLoaderQQNT)。
 4. 点击安装。安装器会下载 QQ 安装包和 LiteLoader，解压，应用 LiteLoader 兼容补丁，并把启动器写到目标根目录。安装器不会默认创建快捷方式。
+
+安装器按当前显示器的 DPI 缩放，4K 屏幕 200% 缩放下不会把整个窗口按位图拉伸，文本框会按窗口宽度铺满。
+
+版本列表优先通过 GitHub API 读取；未登录额度用完、API 返回 403 或无法连接时，自动改用 GitHub 发布页的 Atom 信息和发布页直链，不依赖 API 额度。设置 `GITHUB_TOKEN` 或 `GH_TOKEN` 环境变量可以提高 API 额度。
 
 安装完成后，`LiteLoader\plugins` 是空的；插件由用户自己安装和配置，安装器不会改动插件。
 
@@ -92,6 +96,9 @@ QQPortable.Installer.exe --install --target D:\QQPortable `
 - 在 `Launcher\runtime` 生成 `qqnt.json` 和 `loadLiteLoader.js`。
 - 设置 `NAPCAT_PATCH_PACKAGE`、`NAPCAT_LOAD_PATH`。
 - 隐藏启动 `Launcher\NapCatWinBootMain.exe`。
+- 在后台管理本次启动的 QQ 进程；全部客户端进程结束后，自动清理对应的 NapCat 注入器和控制台宿主，再退出启动器。
+
+关闭 QQ 窗口并隐藏到托盘时，客户端仍在运行，不会触发清理。清理范围仅限本次启动的进程，不会按进程名称结束其他目录的 QQ。
 
 没有 VBS，也没有 PowerShell。生成入口配置使用 .NET Framework 自带的 JSON 序列化，逻辑都在 EXE 里。
 
