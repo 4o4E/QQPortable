@@ -44,7 +44,9 @@ QQPortable.exe
 
 启动器会检查本次便携目录的 QQ 是否已经在运行；已运行时会激活现有窗口，不会启动第二份。
 
-关闭 QQ 主窗口默认只是隐藏到托盘，QQ 和 NapCat 仍在后台运行。需要完全退出时，从 QQ 托盘菜单选择退出；退出后对应的 NapCat 进程会自动结束。
+`Launcher\NapCatWinBootMain.exe` 是 NapCat 提供的启动器，负责启动 QQ 并加载注入文件，不是 QQ 主程序本身。
+
+关闭 QQ 主窗口默认只是隐藏到托盘，QQ 和 NapCat 提供的启动器 `NapCatWinBootMain.exe` 仍在后台运行。需要完全退出时，从 QQ 托盘菜单选择退出；退出后对应的 `NapCatWinBootMain.exe` 会自动结束。
 
 ## 安装后的目录
 
