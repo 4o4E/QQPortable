@@ -1,0 +1,42 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore QQPortable.sln
+
+      - name: Test
+        run: dotnet test QQPortable.sln -c Release --no-restore
+
+      - name: Build release artifacts
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: QQPortable ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            src/QQPortable.Installer/bin/Release/net48/QQPortable.Installer.exe
+            src/QQPortable.Launcher/bin/Release/net48/QQPortable.Launcher.exe
+            THIRD-PARTY-NOTICES.md
+            assets/tools/7za-License.txt

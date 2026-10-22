@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore QQPortable.sln
+
+      - name: Test
+        run: dotnet test QQPortable.sln -c Release --no-restore
+
+      - name: Build launcher and installer
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: QQPortable.Installer
+          path: src/QQPortable.Installer/bin/Release/net48/QQPortable.Installer.exe
+          if-no-files-found: error
+
+      - name: Upload launcher
+        uses: actions/upload-artifact@v4
+        with:
+          name: QQPortable.Launcher
+          path: src/QQPortable.Launcher/bin/Release/net48/QQPortable.Launcher.exe
+          if-no-files-found: error
