@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/images/icon.png" width="112" alt="QQ Portable">
+</p>
+
 # QQ Portable Suite
 
 Windows 10/11 x64 使用的 QQ 便携安装器和启动器，集成 LiteLoaderQQNT 与 NapCat 注入支持。
