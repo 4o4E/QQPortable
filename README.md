@@ -20,6 +20,16 @@ Windows 10/11 x64 使用的 QQ 便携安装器和启动器，集成 LiteLoaderQQ
 
 安装器不会覆盖已有目录，也不会创建桌面快捷方式。第一次启动时，QQ 可能需要重新登录。
 
+## 界面截图
+
+安装器主界面：
+
+![安装器主界面](docs/images/installer.png)
+
+安装完成页面：
+
+![安装完成页面](docs/images/completion.png)
+
 ## 启动
 
 打开安装目录，运行：
