@@ -4,6 +4,7 @@
 
 ```text
 PortableRoot\
+  QQPortable.exe
   QQ\
     QQ.exe
     versions\<version>\resources\app\package.json
@@ -13,13 +14,11 @@ PortableRoot\
     plugins\
     data\
   Launcher\
-    QQPortable.Launcher.exe
     NapCatWinBootMain.exe
     NapCatWinBootHook.dll
     runtime\
       qqnt.json
       loadLiteLoader.js
-  QQ.lnk
 ```
 
 `runtime` 是启动器生成的，不放源码或安装脚本。
@@ -29,7 +28,7 @@ PortableRoot\
 Startup sequence:
 
 ```text
-QQPortable.Launcher.exe
+QQPortable.exe
   -> check running QQ by executable path
   -> find latest QQ\versions\*\resources\app\package.json
   -> set package.main = "./loadNapCat.js"
@@ -45,12 +44,12 @@ The launcher is a `WinExe` targeting .NET Framework 4.8. It has no script files 
 
 The installer embeds:
 
-- Built `QQPortable.Launcher.exe`
+- Built `QQPortable.exe`
 - `NapCatWinBootMain.exe`
 - `NapCatWinBootHook.dll`
 - `7za.exe` and its license
 
-It downloads QQ and LiteLoader from GitHub, extracts to a temporary directory, copies a clean result to the selected empty target, applies the LiteLoader patches, and creates the shortcut.
+It downloads QQ and LiteLoader from GitHub, extracts to a temporary directory, copies a clean result to the selected empty target, applies the LiteLoader patches, and writes the launcher to the target root. It does not create a shortcut.
 
 QQ installer handling:
 

@@ -6,10 +6,11 @@ namespace QQPortable.Installer
 {
     internal static class EmbeddedAssets
     {
-        public static void ExtractLauncher(string launcherDirectory)
+        public static void ExtractLauncher(string targetRoot)
         {
+            string launcherDirectory = Path.Combine(targetRoot, "Launcher");
             Directory.CreateDirectory(launcherDirectory);
-            Extract("QQPortable.Launcher.exe", Path.Combine(launcherDirectory, "QQPortable.Launcher.exe"));
+            Extract("QQPortable.exe", Path.Combine(targetRoot, "QQPortable.exe"));
             Extract("NapCatWinBootMain.exe", Path.Combine(launcherDirectory, "NapCatWinBootMain.exe"));
             Extract("NapCatWinBootHook.dll", Path.Combine(launcherDirectory, "NapCatWinBootHook.dll"));
             Directory.CreateDirectory(Path.Combine(launcherDirectory, "runtime"));

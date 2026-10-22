@@ -7,7 +7,7 @@
     <PlatformTarget>AnyCPU</PlatformTarget>
     <Prefer32Bit>false</Prefer32Bit>
     <ApplicationIcon>..\..\assets\launcher.ico</ApplicationIcon>
-    <AssemblyName>QQPortable.Launcher</AssemblyName>
+    <AssemblyName>QQPortable</AssemblyName>
     <RootNamespace>QQPortable.Launcher</RootNamespace>
   </PropertyGroup>
   <ItemGroup>

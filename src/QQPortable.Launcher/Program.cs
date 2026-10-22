@@ -27,16 +27,11 @@ namespace QQPortable.Launcher
             {
                 SetCurrentProcessExplicitAppUserModelID(AppId);
 
-                string launcherDir = AppDomain.CurrentDomain.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-                string portableRoot = Directory.GetParent(launcherDir)?.FullName;
-                if (portableRoot == null)
-                {
-                    throw new InvalidOperationException("Launcher is not inside a portable directory.");
-                }
-
-                string qqDir = Path.Combine(portableRoot, "QQ");
+                string root = AppDomain.CurrentDomain.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                string launcherDir = Path.Combine(root, "Launcher");
+                string qqDir = Path.Combine(root, "QQ");
                 string qqExe = Path.Combine(qqDir, "QQ.exe");
-                string liteLoaderDir = Path.Combine(portableRoot, "LiteLoader");
+                string liteLoaderDir = Path.Combine(root, "LiteLoader");
                 string bootExe = Path.Combine(launcherDir, "NapCatWinBootMain.exe");
                 string hookDll = Path.Combine(launcherDir, "NapCatWinBootHook.dll");
                 string runtimeDir = Path.Combine(launcherDir, "runtime");
@@ -72,7 +67,7 @@ namespace QQPortable.Launcher
                 Environment.SetEnvironmentVariable("NAPCAT_LOAD_PATH", loadScript, EnvironmentVariableTarget.Process);
 
                 string bootArguments = "\"" + qqExe + "\" \"" + hookDll + "\"";
-                StartHidden(bootExe, bootArguments, portableRoot);
+                StartHidden(bootExe, bootArguments, root);
             }
             catch (Exception error)
             {

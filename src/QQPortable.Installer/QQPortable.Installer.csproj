@@ -18,7 +18,7 @@
     <Reference Include="Microsoft.CSharp" />
   </ItemGroup>
   <ItemGroup>
-    <EmbeddedResource Include="Assets\launcher\QQPortable.Launcher.exe" LogicalName="QQPortable.Launcher.exe" />
+    <EmbeddedResource Include="Assets\launcher\QQPortable.exe" LogicalName="QQPortable.exe" />
     <EmbeddedResource Include="Assets\launcher\NapCatWinBootMain.exe" LogicalName="NapCatWinBootMain.exe" />
     <EmbeddedResource Include="Assets\launcher\NapCatWinBootHook.dll" LogicalName="NapCatWinBootHook.dll" />
     <EmbeddedResource Include="Assets\tools\7za.exe" LogicalName="7za.exe" />

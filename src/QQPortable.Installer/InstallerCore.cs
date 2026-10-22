@@ -80,11 +80,9 @@ namespace QQPortable.Installer
 
                 LiteLoaderPatcher.Apply(Path.Combine(target, "LiteLoader"), log);
 
-                string launcherDir = Path.Combine(target, "Launcher");
-                EmbeddedAssets.ExtractLauncher(launcherDir);
+                EmbeddedAssets.ExtractLauncher(target);
                 Directory.CreateDirectory(Path.Combine(target, "LiteLoader", "plugins"));
-                Directory.CreateDirectory(Path.Combine(launcherDir, "runtime"));
-                CreateShortcut(target, Path.Combine(launcherDir, "QQPortable.Launcher.exe"));
+                Directory.CreateDirectory(Path.Combine(target, "Launcher", "runtime"));
 
                 string summary = "安装完成\nQQ: " + (string.IsNullOrWhiteSpace(qqVersion) ? "(已解压)" : qqVersion) +
                                  "\nLiteLoader: " + (string.IsNullOrWhiteSpace(liteLoaderVersion) ? "(本地目录)" : liteLoaderVersion) +
@@ -168,22 +166,17 @@ namespace QQPortable.Installer
         {
             string firstDir = Path.Combine(temporary, "QQExtractFirst");
             Directory.CreateDirectory(firstDir);
-            try
+            if (TryRunProcess(sevenZip, "x -y -o\"" + firstDir + "\" \"" + installerPath + "\"", temporary))
             {
-                RunProcess(sevenZip, "x -y -o\"" + firstDir + "\" \"" + installerPath + "\"", temporary);
                 string first = FindQqExe(firstDir);
                 if (first != null)
                 {
                     return first;
                 }
             }
-            catch (Exception error)
-            {
-                log?.Invoke("安装包首层解压未找到 QQ，尝试内层归档：" + error.Message);
-            }
 
+            log?.Invoke("安装包包含内层归档，正在提取 QQ");
             List<long> offsets = Find7zOffsets(installerPath);
-            log?.Invoke("检测到 " + offsets.Count + " 个 7z 归档偏移");
             foreach (long offset in offsets)
             {
                 string slice = Path.Combine(temporary, "qq-" + offset + ".7z");
@@ -192,17 +185,20 @@ namespace QQPortable.Installer
                 {
                     SliceFile(installerPath, offset, slice);
                     Directory.CreateDirectory(extract);
-                    RunProcess(sevenZip, "x -y -o\"" + extract + "\" \"" + slice + "\"", temporary);
+                    if (!TryRunProcess(sevenZip, "x -y -o\"" + extract + "\" \"" + slice + "\"", temporary))
+                    {
+                        continue;
+                    }
                     string qq = FindQqExe(extract);
                     if (qq != null)
                     {
-                        log?.Invoke("从偏移 " + offset + " 解出 QQ");
+                        log?.Invoke("QQ 安装包已解压");
                         return qq;
                     }
                 }
-                catch (Exception error)
+                catch
                 {
-                    log?.Invoke("偏移 " + offset + " 解压失败：" + error.Message);
+                    // 内层归档候选可能不是有效安装包，继续尝试下一个。
                 }
             }
             return null;
@@ -263,7 +259,7 @@ namespace QQPortable.Installer
             }
         }
 
-        private static void RunProcess(string fileName, string arguments, string workingDirectory)
+        private static bool TryRunProcess(string fileName, string arguments, string workingDirectory)
         {
             ProcessStartInfo info = new ProcessStartInfo(fileName, arguments);
             info.WorkingDirectory = workingDirectory;
@@ -273,30 +269,11 @@ namespace QQPortable.Installer
             info.RedirectStandardError = true;
             using (Process process = Process.Start(info))
             {
-                string output = process.StandardOutput.ReadToEnd();
-                string error = process.StandardError.ReadToEnd();
+                process.StandardOutput.ReadToEnd();
+                process.StandardError.ReadToEnd();
                 process.WaitForExit();
-                if (process.ExitCode != 0)
-                {
-                    throw new InvalidOperationException("7-Zip 解压失败：" + error + output);
-                }
+                return process.ExitCode == 0;
             }
-        }
-
-        private static void CreateShortcut(string root, string launcherExe)
-        {
-            Type shellType = Type.GetTypeFromProgID("WScript.Shell");
-            if (shellType == null)
-            {
-                throw new InvalidOperationException("无法创建快捷方式：WScript.Shell 不可用。");
-            }
-            dynamic shell = Activator.CreateInstance(shellType);
-            dynamic shortcut = shell.CreateShortcut(Path.Combine(root, "QQ.lnk"));
-            shortcut.TargetPath = launcherExe;
-            shortcut.WorkingDirectory = root;
-            shortcut.IconLocation = launcherExe + ",0";
-            shortcut.Description = "QQ Portable + LiteLoader";
-            shortcut.Save();
         }
 
         private static void CopyDirectory(string source, string destination)

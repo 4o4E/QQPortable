@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Linq;
@@ -17,6 +18,7 @@ namespace QQPortable.Installer
         private readonly Button installButton = new Button();
         private readonly TextBox logBox = new TextBox();
         private readonly Label statusLabel = new Label();
+        private TableLayoutPanel rootLayout;
 
         public MainForm()
         {
@@ -27,13 +29,14 @@ namespace QQPortable.Installer
             StartPosition = FormStartPosition.CenterScreen;
             Font = new Font("Microsoft YaHei UI", 9F);
 
-            TableLayoutPanel root = new TableLayoutPanel
+            rootLayout = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
                 ColumnCount = 3,
                 RowCount = 7,
                 Padding = new Padding(14),
             };
+            TableLayoutPanel root = rootLayout;
             root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 105));
             root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 85));
@@ -165,6 +168,7 @@ namespace QQPortable.Installer
             qqBox.Enabled = false;
             liteLoaderBox.Enabled = false;
             AppendLog("开始安装 QQ " + qqAsset.Version + " / LiteLoader " + release.Tag);
+            bool completed = false;
             try
             {
                 InstallResult result = await Task.Run(() => InstallerCore.Install(new InstallOptions
@@ -173,20 +177,97 @@ namespace QQPortable.Installer
                     QQVersion = qqAsset.Version,
                     LiteLoaderVersion = release.Tag,
                 }, AppendLog));
-                MessageBox.Show(this, result.Summary, "QQ Portable", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                ShowCompletion(result, target);
+                completed = true;
             }
             catch (Exception error)
             {
                 AppendLog(error.ToString());
-                MessageBox.Show(this, error.Message, "安装失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                statusLabel.Text = "安装失败，详情见日志";
             }
             finally
             {
-                installButton.Enabled = true;
-                browseButton.Enabled = true;
-                qqBox.Enabled = true;
-                liteLoaderBox.Enabled = true;
+                if (!completed)
+                {
+                    installButton.Enabled = true;
+                    browseButton.Enabled = true;
+                    qqBox.Enabled = true;
+                    liteLoaderBox.Enabled = true;
+                }
             }
+        }
+
+        private void ShowCompletion(InstallResult result, string target)
+        {
+            Controls.Clear();
+
+            TableLayoutPanel layout = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                RowCount = 4,
+                Padding = new Padding(28),
+            };
+            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
+            Label title = new Label
+            {
+                Text = "安装完成",
+                AutoSize = true,
+                Font = new Font(Font.FontFamily, 16F, FontStyle.Bold),
+                Margin = new Padding(0, 0, 0, 12),
+            };
+            layout.Controls.Add(title, 0, 0);
+
+            Label summary = new Label
+            {
+                Text = result.Summary + "\r\n\r\n插件请自行放入：\r\n" + Path.Combine(target, "LiteLoader", "plugins"),
+                AutoSize = true,
+                MaximumSize = new Size(680, 0),
+            };
+            layout.Controls.Add(summary, 0, 1);
+
+            CheckBox openQq = new CheckBox
+            {
+                Text = "立即打开 QQ",
+                AutoSize = true,
+                Checked = false,
+                Margin = new Padding(0, 12, 0, 12),
+            };
+            layout.Controls.Add(openQq, 0, 2);
+
+            Button finish = new Button
+            {
+                Text = "完成",
+                Width = 100,
+                Height = 32,
+                Anchor = AnchorStyles.Right,
+            };
+            finish.Click += (sender, args) =>
+            {
+                if (openQq.Checked)
+                {
+                    string launcher = Path.Combine(target, "QQPortable.exe");
+                    try
+                    {
+                        Process.Start(new ProcessStartInfo(launcher)
+                        {
+                            WorkingDirectory = target,
+                            UseShellExecute = true,
+                        });
+                    }
+                    catch (Exception error)
+                    {
+                        MessageBox.Show(this, error.Message, "无法打开 QQ", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
+                }
+                Close();
+            };
+            layout.Controls.Add(finish, 0, 3);
+            Controls.Add(layout);
         }
 
         private void AppendLog(string message)

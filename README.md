@@ -2,14 +2,14 @@
 
 在 2026 年 10 月能跑通的 QQ 9.9.36 + LiteLoaderQQNT 1.4.1 便携安装器和启动器。
 
-目标是让安装后的目录只剩四样东西：
+目标是让安装后的目录只剩这些内容：
 
 ```text
 <便携目录>\
+  QQPortable.exe         启动器
   QQ\                    官方 QQ 程序
   LiteLoader\            LiteLoader 本体、插件和数据
-  Launcher\              启动 EXE、NapCat 注入文件和运行时配置
-  QQ.lnk                 指向 Launcher\QQPortable.Launcher.exe
+  Launcher\              NapCat 注入文件和运行时配置
 ```
 
 没有 `start.vbs`、`prepare-qqnt.ps1`、`Launcher.cs`、`QQ.ico` 或 7-Zip 解压工具留在便携目录里。
@@ -36,8 +36,8 @@ QQPortable\
 
 ```powershell
 cd F:\Desktop\project\QQPortable
-dotnet test QQPortable.sln -c Release
 powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1
+dotnet test QQPortable.sln -c Release
 ```
 
 仓库使用传统 `.sln`。`.slnx` 是较新的 XML 解决方案格式，旧版 Visual Studio 和部分 CI 环境支持不完整，项目不依赖它。
@@ -57,7 +57,7 @@ Release 的 EXE 没有代码签名。
 产物：
 
 ```text
-src\QQPortable.Launcher\bin\Release\net48\QQPortable.Launcher.exe
+src\QQPortable.Launcher\bin\Release\net48\QQPortable.exe
 src\QQPortable.Installer\bin\Release\net48\QQPortable.Installer.exe
 ```
 
@@ -70,7 +70,7 @@ src\QQPortable.Installer\bin\Release\net48\QQPortable.Installer.exe
 1. 选择目标目录，目标必须为空；不会修改现有安装。
 2. 选择 QQ 版本，列表来自 [a1515333102/QQ-Releases](https://github.com/a1515333102/QQ-Releases)。
 3. 选择 LiteLoader 版本，列表来自 [LiteLoaderQQNT/LiteLoaderQQNT](https://github.com/LiteLoaderQQNT/LiteLoaderQQNT)。
-4. 点击安装。安装器会下载 QQ 安装包和 LiteLoader，解压，应用 LiteLoader 兼容补丁，写入启动器，并创建 `QQ.lnk`。
+4. 点击安装。安装器会下载 QQ 安装包和 LiteLoader，解压，应用 LiteLoader 兼容补丁，并把启动器写到目标根目录。安装器不会默认创建快捷方式。
 
 安装完成后，`LiteLoader\plugins` 是空的；插件由用户自己安装和配置，安装器不会改动插件。
 
@@ -86,7 +86,7 @@ QQPortable.Installer.exe --install --target D:\QQPortable `
 
 ## 启动器
 
-`Launcher\QQPortable.Launcher.exe` 做这些事：
+根目录的 `QQPortable.exe` 做这些事：
 
 - 检查目标便携目录的 `QQ.exe` 是否已经在运行；已运行则激活现有窗口，不启动第二份。
 - 在 `Launcher\runtime` 生成 `qqnt.json` 和 `loadLiteLoader.js`。
@@ -114,3 +114,4 @@ GitHub 上的 QQ 安装包是 7z SFX，外层 7z 里只有许可文件，真正�
 - QQ 后续版本如果改变安装包或启动结构，安装器和注入文件可能需要跟着更新。
 - 没有代码签名。
 - 当前已有的 `D:\App\QQ.9.9.36.Portable` 不参与构建和测试；测试使用独立的空目录并已清理。
+- 安装完成后只有启动器在根目录，`Launcher` 目录只放注入器和运行时文件。
