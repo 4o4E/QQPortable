@@ -1,0 +1,35 @@
+schema: spec-driven
+
+context: |
+  Language: zh-CN
+  All artifacts must be written in zh-CN.
+  Keep OpenSpec structural headings and SHALL/MUST keywords in English.
+  QQPortable is a Windows 10/11 x64 suite: a single-EXE WinForms installer plus a .NET Framework 4.8 launcher.
+  The installer embeds the launcher, NapCat files, and 7-Zip, and installs only into an empty target directory.
+  The launcher prepares LiteLoader/NapCat runtime files, starts QQ, and cleans up only the processes from its own session after QQ exits.
+  User-facing installation and usage instructions live in README.md; development instructions live in AGENTS.md.
+  The installer must work as a single EXE without an external .exe.config, including at 4K/high-DPI scaling.
+  Do not add telemetry, bundled plugins, automatic shortcuts, or changes to user chat data.
+
+rules:
+  proposal:
+    - State the user-visible behavior, Windows compatibility impact, and explicit non-goals.
+    - Keep the scope limited to the requested problem; list any behavior left unchanged.
+  design:
+    - Document process ownership and cleanup, single-EXE packaging, and high-DPI behavior when relevant.
+    - Identify which existing launch, install, or catalog contract changes.
+  tasks:
+    - Include the build command and the targeted verification for the changed behavior.
+    - Include a real Windows UI or process smoke check when the change affects those paths.
+    - Never use mocks or test-only fallbacks to prove behavior.
+
+operations:
+  apply:
+    guidance:
+      - Follow AGENTS.md for build, release, and verification requirements.
+      - Remove diagnostic code and temporary files before finishing.
+      - Check UI changes at 100%, 150%, and 200% scaling.
+  archive:
+    guidance:
+      - Update openspec/specs and the relevant developer documentation before archiving.
+      - Summarize the shipped behavior and any compatibility limits.
