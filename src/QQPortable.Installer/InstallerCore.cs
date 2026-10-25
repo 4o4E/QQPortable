@@ -6,6 +6,7 @@ using System.IO.Compression;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using QQPortable.Shared;
 
 namespace QQPortable.Installer
 {
@@ -81,8 +82,8 @@ namespace QQPortable.Installer
                 LiteLoaderPatcher.Apply(Path.Combine(target, "LiteLoader"), log);
 
                 EmbeddedAssets.ExtractLauncher(target);
-                Directory.CreateDirectory(Path.Combine(target, "LiteLoader", "plugins"));
-                Directory.CreateDirectory(Path.Combine(target, "Launcher", "runtime"));
+                EmbeddedAssets.ExtractPlugin(target);
+                PortableConfig.LoadOrCreate(target);
 
                 string summary = "安装完成\nQQ: " + (string.IsNullOrWhiteSpace(qqVersion) ? "(已解压)" : qqVersion) +
                                  "\nLiteLoader: " + (string.IsNullOrWhiteSpace(liteLoaderVersion) ? "(本地目录)" : liteLoaderVersion) +

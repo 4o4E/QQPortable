@@ -1,0 +1,21 @@
+{
+  "manifest_version": 4,
+  "type": "extension",
+  "name": "QQPortable 控制",
+  "slug": "qqportable_settings",
+  "description": "控制 QQPortable 开机自启，并在 QQ 左下角“更多”菜单提供重启按钮",
+  "version": "0.1.0",
+  "authors": [
+    {
+      "name": "4o4E"
+    }
+  ],
+  "platform": [
+    "win32"
+  ],
+  "injects": {
+    "main": "./src/main.cjs",
+    "preload": "./src/preload.cjs",
+    "renderer": "./src/renderer.mjs"
+  }
+}

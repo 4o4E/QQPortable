@@ -38,5 +38,7 @@ jobs:
           files: |
             src/QQPortable.Installer/bin/Release/net48/QQPortable.Installer.exe
             src/QQPortable.Launcher/bin/Release/net48/QQPortable.exe
+            src/QQPortable.Settings/bin/Release/net48/QQPortable.setting.exe
+            src/QQPortable.Installer/bin/Release/net48/qqportable_settings.zip
             THIRD-PARTY-NOTICES.md
             assets/tools/7za-License.txt

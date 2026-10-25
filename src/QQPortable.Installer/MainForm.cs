@@ -115,7 +115,7 @@ namespace QQPortable.Installer
 
             TextBox hint = new TextBox
             {
-                Text = "只安装 QQ、LiteLoader 和启动器；插件请安装完成后自行放入 LiteLoader\\plugins。",
+                Text = "安装 QQ、LiteLoader、启动器、设置程序和 QQPortable 控制插件；其他插件请放入 LiteLoader\\plugins。",
                 ReadOnly = true,
                 BorderStyle = BorderStyle.None,
                 BackColor = SystemColors.Control,
@@ -298,7 +298,7 @@ namespace QQPortable.Installer
 
             TextBox summary = new TextBox
             {
-                Text = result.Summary + "\r\n\r\n插件请自行放入：\r\n" + Path.Combine(target, "LiteLoader", "plugins"),
+                Text = result.Summary + "\r\n\r\n已附带 QQPortable 控制插件。其他插件请放入：\r\n" + Path.Combine(target, "LiteLoader", "plugins"),
                 ReadOnly = true,
                 Multiline = true,
                 BorderStyle = BorderStyle.FixedSingle,

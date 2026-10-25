@@ -4,6 +4,7 @@ using System.IO;
 using System.Text;
 using Xunit;
 using QQPortable.Installer;
+using QQPortable.Shared;
 
 namespace QQPortable.Tests
 {
@@ -118,6 +119,101 @@ namespace QQPortable.Tests
             File.WriteAllText(Path.Combine(root, "src", "preload", "module.js"), "unknown();\n");
 
             Assert.Throws<InvalidOperationException>(() => LiteLoaderPatcher.Apply(root, _ => { }));
+        }
+
+        [Fact]
+        public void PortableConfigWritesDefaultWhenMissing()
+        {
+            string root = Path.Combine(temporary, "portable-default");
+            Directory.CreateDirectory(root);
+
+            PortableConfig config = PortableConfig.LoadOrCreate(root);
+
+            Assert.False(config.AutoStart);
+            string path = Path.Combine(root, "QQPortable.json");
+            Assert.True(File.Exists(path));
+            string text = File.ReadAllText(path);
+            Assert.Contains("\"autoStart\": false", text);
+        }
+
+        [Fact]
+        public void PortableConfigPreservesUnknownFields()
+        {
+            string root = Path.Combine(temporary, "portable-preserve");
+            Directory.CreateDirectory(root);
+            string path = Path.Combine(root, "QQPortable.json");
+            File.WriteAllText(path,
+                "{\"autoStart\":true,\"note\":\"keep\",\"nested\":{\"value\":1}}",
+                new UTF8Encoding(false));
+
+            PortableConfig config = PortableConfig.LoadOrCreate(root);
+            Assert.True(config.AutoStart);
+            config.AutoStart = false;
+            config.Save();
+
+            string text = File.ReadAllText(path);
+            Assert.Contains("\"note\": \"keep\"", text);
+            Assert.Contains("\"nested\"", text);
+            Assert.Contains("\"autoStart\": false", text);
+            Assert.False(PortableConfig.LoadOrCreate(root).AutoStart);
+        }
+
+        [Fact]
+        public void PortableConfigRejectsInvalidJson()
+        {
+            string root = Path.Combine(temporary, "portable-invalid");
+            Directory.CreateDirectory(root);
+            File.WriteAllText(Path.Combine(root, "QQPortable.json"), "{", new UTF8Encoding(false));
+
+            Assert.Throws<InvalidDataException>(() => PortableConfig.LoadOrCreate(root));
+        }
+
+        [Fact]
+        public void PortableConfigRejectsNonBooleanAutoStart()
+        {
+            string root = Path.Combine(temporary, "portable-type");
+            Directory.CreateDirectory(root);
+            File.WriteAllText(Path.Combine(root, "QQPortable.json"),
+                "{\"autoStart\":\"true\"}",
+                new UTF8Encoding(false));
+
+            PortableConfig config = PortableConfig.LoadOrCreate(root);
+
+            Assert.Throws<InvalidDataException>(() => config.AutoStart);
+        }
+
+        [Fact]
+        public void AutoStartCommandQuotesExecutablePath()
+        {
+            string command = AutoStartRegistration.BuildCommand(@"C:\Program Files\QQPortable");
+
+            Assert.Equal("\"C:\\Program Files\\QQPortable\\QQPortable.exe\"", command);
+        }
+
+        [Fact]
+        public void ExtractsSettingsAndPluginAssets()
+        {
+            string root = Path.Combine(temporary, "extracted");
+            Directory.CreateDirectory(root);
+
+            EmbeddedAssets.ExtractLauncher(root);
+            EmbeddedAssets.ExtractPlugin(root);
+
+            string[] files =
+            {
+                Path.Combine(root, "QQPortable.exe"),
+                Path.Combine(root, "QQPortable.setting.exe"),
+                Path.Combine(root, "Launcher", "NapCatWinBootMain.exe"),
+                Path.Combine(root, "LiteLoader", "plugins", "qqportable_settings", "manifest.json"),
+                Path.Combine(root, "LiteLoader", "plugins", "qqportable_settings", "src", "main.cjs"),
+                Path.Combine(root, "LiteLoader", "plugins", "qqportable_settings", "src", "preload.cjs"),
+                Path.Combine(root, "LiteLoader", "plugins", "qqportable_settings", "src", "renderer.mjs"),
+            };
+            foreach (string file in files)
+            {
+                Assert.True(File.Exists(file), file);
+                Assert.True(new FileInfo(file).Length > 0, file);
+            }
         }
 
         private static int CountOccurrences(string text, string needle)

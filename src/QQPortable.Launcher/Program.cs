@@ -5,20 +5,26 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
+using QQPortable.Shared;
 
 namespace QQPortable.Launcher
 {
     internal static class Program
     {
         private const string AppId = "QQ.Portable.LiteLoader";
+        private const int RestoreWindow = 9;
 
         [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
         private static extern int SetCurrentProcessExplicitAppUserModelID(string appId);
 
         [DllImport("user32.dll")]
         private static extern bool SetForegroundWindow(IntPtr window);
+
+        [DllImport("user32.dll")]
+        private static extern bool ShowWindow(IntPtr window, int command);
 
         [STAThread]
         private static void Main(string[] args)
@@ -38,40 +44,75 @@ namespace QQPortable.Launcher
                 string patchJson = Path.Combine(runtimeDir, "qqnt.json");
                 string loadScript = Path.Combine(runtimeDir, "loadLiteLoader.js");
 
+                if (HasArgument(args, "--restart"))
+                {
+                    RestartSignal.Signal(root);
+                    return;
+                }
+
                 RequireFile(qqExe);
                 RequireFile(bootExe);
                 RequireFile(hookDll);
                 RequireDirectory(liteLoaderDir);
 
-                bool prepareOnly = args.Any(argument => string.Equals(argument, "--prepare-only", StringComparison.OrdinalIgnoreCase));
-                if (!prepareOnly)
+                if (HasArgument(args, "--prepare-only"))
                 {
-                    Process running = FindRunningQQ(qqExe);
-                    if (running != null)
-                    {
-                        if (running.MainWindowHandle != IntPtr.Zero)
-                        {
-                            SetForegroundWindow(running.MainWindowHandle);
-                        }
-                        return;
-                    }
-                }
-
-                PrepareRuntime(qqDir, liteLoaderDir, runtimeDir, patchJson, loadScript);
-                if (prepareOnly)
-                {
+                    PrepareRuntime(qqDir, liteLoaderDir, runtimeDir, patchJson, loadScript);
                     return;
                 }
 
-                Environment.SetEnvironmentVariable("NAPCAT_PATCH_PACKAGE", patchJson, EnvironmentVariableTarget.Process);
-                Environment.SetEnvironmentVariable("NAPCAT_LOAD_PATH", loadScript, EnvironmentVariableTarget.Process);
+                using (Mutex mutex = new Mutex(false, RestartSignal.MutexName(root)))
+                {
+                    bool acquired;
+                    try
+                    {
+                        acquired = mutex.WaitOne(0);
+                    }
+                    catch (AbandonedMutexException)
+                    {
+                        acquired = true;
+                    }
+                    if (!acquired)
+                    {
+                        ActivateRunningQQ(qqExe);
+                        return;
+                    }
 
-                string bootArguments = "\"" + qqExe + "\" \"" + hookDll + "\"";
-                BootstrapSession.Run(bootExe, bootArguments, root);
+                    try
+                    {
+                        PortableConfig config = PortableConfig.LoadOrCreate(root);
+                        AutoStartRegistration.Sync(root, config.AutoStart);
+
+                        using (Process running = FindRunningQQ(qqExe))
+                        {
+                            if (running != null)
+                            {
+                                Activate(running);
+                                return;
+                            }
+                        }
+
+                        PrepareRuntime(qqDir, liteLoaderDir, runtimeDir, patchJson, loadScript);
+
+                        Environment.SetEnvironmentVariable("NAPCAT_PATCH_PACKAGE", patchJson, EnvironmentVariableTarget.Process);
+                        Environment.SetEnvironmentVariable("NAPCAT_LOAD_PATH", loadScript, EnvironmentVariableTarget.Process);
+
+                        string bootArguments = "\"" + qqExe + "\" \"" + hookDll + "\"";
+                        using (EventWaitHandle restartEvent = new EventWaitHandle(false, EventResetMode.AutoReset, RestartSignal.EventName(root)))
+                        {
+                            new LauncherSession(bootExe, bootArguments, root, restartEvent).Run();
+                        }
+                    }
+                    finally
+                    {
+                        mutex.ReleaseMutex();
+                    }
+                }
             }
             catch (Exception error)
             {
                 MessageBox.Show(error.ToString(), "QQ Portable", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                Environment.ExitCode = 1;
             }
         }
 
@@ -131,24 +172,65 @@ namespace QQPortable.Launcher
         private static Process FindRunningQQ(string expectedPath)
         {
             string expected = Path.GetFullPath(expectedPath);
+            Process matched = null;
             foreach (Process process in Process.GetProcessesByName("QQ"))
             {
+                bool keep = false;
                 try
                 {
                     string actual = Path.GetFullPath(process.MainModule.FileName);
                     if (string.Equals(actual, expected, StringComparison.OrdinalIgnoreCase))
                     {
-                        return process;
+                        // 优先保留有主窗口的客户端进程，其余匹配进程只释放句柄。
+                        if (matched == null || (matched.MainWindowHandle == IntPtr.Zero && process.MainWindowHandle != IntPtr.Zero))
+                        {
+                            matched?.Dispose();
+                            matched = process;
+                            keep = true;
+                        }
                     }
                 }
                 catch
                 {
                     // 进程已退出或当前权限无法读取路径，继续检查下一个。
                 }
+                finally
+                {
+                    if (!keep)
+                    {
+                        process.Dispose();
+                    }
+                }
             }
-            return null;
+            return matched;
         }
 
+        private static void ActivateRunningQQ(string qqExe)
+        {
+            using (Process running = FindRunningQQ(qqExe))
+            {
+                if (running != null)
+                {
+                    Activate(running);
+                }
+            }
+        }
+
+        private static void Activate(Process running)
+        {
+            IntPtr window = running.MainWindowHandle;
+            if (window == IntPtr.Zero)
+            {
+                return;
+            }
+            ShowWindow(window, RestoreWindow);
+            SetForegroundWindow(window);
+        }
+
+        private static bool HasArgument(string[] args, string expected)
+        {
+            return args.Any(argument => string.Equals(argument, expected, StringComparison.OrdinalIgnoreCase));
+        }
 
         private static void RequireFile(string path)
         {

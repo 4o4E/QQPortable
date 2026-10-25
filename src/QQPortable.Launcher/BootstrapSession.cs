@@ -12,71 +12,150 @@ namespace QQPortable.Launcher
     /// QQ 可能创建多个客户端进程，关闭窗口到托盘不代表退出。
     /// Windows Job 限定本次进程树，QQ 进程句柄全部发出退出信号后，
     /// 结束本次 NapCat 与控制台宿主，不影响其他 QQ 会话。
+    /// 重启请求通过 RequestStop 结束当前 Job，由外层会话循环创建新会话。
     /// </summary>
-    internal static class BootstrapSession
+    internal sealed class BootstrapSession
     {
         private const uint Infinite = uint.MaxValue;
         private const uint NewProcess = 6;
         private const uint ActiveProcessZero = 4;
         private const uint ClientExited = 0x100;
 
-        public static void Run(string executable, string arguments, string workingDirectory)
+        private readonly string executable;
+        private readonly string arguments;
+        private readonly string workingDirectory;
+        private readonly object gate = new object();
+        private SafeFileHandle job;
+        private bool stopRequested;
+
+        public BootstrapSession(string executable, string arguments, string workingDirectory)
         {
-            using (SafeFileHandle job = CreateJobObject(IntPtr.Zero, null))
-            using (SafeFileHandle port = CreateIoCompletionPort(new IntPtr(-1), IntPtr.Zero, UIntPtr.Zero, 1))
+            this.executable = executable;
+            this.arguments = arguments;
+            this.workingDirectory = workingDirectory;
+        }
+
+        public bool StopRequested
+        {
+            get
             {
-                if (job.IsInvalid || port.IsInvalid) throw new Win32Exception(Marshal.GetLastWin32Error());
-                CompletionPort association = new CompletionPort { Port = port.DangerousGetHandle() };
-                if (!SetInformationJobObject(job, 7, ref association, (uint)Marshal.SizeOf(association)))
-                    throw new Win32Exception(Marshal.GetLastWin32Error());
-
-                StartupInfo startup = new StartupInfo { Size = (uint)Marshal.SizeOf(typeof(StartupInfo)) };
-                // 挂起创建，先加入 Job 再恢复，避免 QQ 在加入监管前创建子进程。
-                StringBuilder command = new StringBuilder("\"" + executable + "\" " + arguments);
-                if (!CreateProcess(executable, command, IntPtr.Zero, IntPtr.Zero, false,
-                    0x00000004 | 0x08000000, IntPtr.Zero, workingDirectory, ref startup, out ProcessInformation process))
-                    throw new Win32Exception(Marshal.GetLastWin32Error());
-
-                bool assigned = false;
-                try
+                lock (gate)
                 {
-                    if (!AssignProcessToJobObject(job, process.Process)) throw new Win32Exception(Marshal.GetLastWin32Error());
-                    assigned = true;
-                    if (ResumeThread(process.Thread) == uint.MaxValue) throw new Win32Exception(Marshal.GetLastWin32Error());
+                    return stopRequested;
+                }
+            }
+        }
 
-                    HashSet<uint> clients = new HashSet<uint>();
-                    bool jobEmpty = false;
-                    while (true)
+        public void RequestStop()
+        {
+            lock (gate)
+            {
+                stopRequested = true;
+                if (job != null && !job.IsInvalid)
+                {
+                    if (!TerminateJobObject(job, 0))
                     {
-                        if (!GetQueuedCompletionStatus(port, out uint message, out UIntPtr key, out IntPtr processId, Infinite))
-                            throw new Win32Exception(Marshal.GetLastWin32Error());
-                        if (message == ActiveProcessZero)
-                        {
-                            jobEmpty = true;
-                            if (clients.Count == 0) return;
-                        }
-                        uint id = unchecked((uint)processId.ToInt64());
-                        if (message == NewProcess && id != process.ProcessId && WatchClient(id, port)) clients.Add(id);
-                        if (message == ClientExited && clients.Remove(id) && clients.Count == 0)
-                        {
-                            if (jobEmpty) return;
-                            // conhost 与 crashpad 等辅助进程不能阻止 QQ 退出后的清理。
-                            if (!TerminateJobObject(job, 0)) throw new Win32Exception(Marshal.GetLastWin32Error());
-                        }
+                        throw new Win32Exception(Marshal.GetLastWin32Error());
                     }
                 }
-                catch
+            }
+        }
+
+        public void Run()
+        {
+            using (SafeFileHandle jobHandle = CreateJobObject(IntPtr.Zero, null))
+            using (SafeFileHandle port = CreateIoCompletionPort(new IntPtr(-1), IntPtr.Zero, UIntPtr.Zero, 1))
+            {
+                if (jobHandle.IsInvalid || port.IsInvalid) throw new Win32Exception(Marshal.GetLastWin32Error());
+                lock (gate)
                 {
-                    // 启动或监管失败不能遗留挂起进程；清理后继续报告原始错误。
-                    if (assigned) TerminateJobObject(job, 1);
-                    else TerminateProcess(process.Process, 1);
-                    throw;
+                    job = jobHandle;
+                }
+
+                try
+                {
+                    if (IsStopRequested()) return;
+                    CompletionPort association = new CompletionPort { Port = port.DangerousGetHandle() };
+                    if (!SetInformationJobObject(jobHandle, 7, ref association, (uint)Marshal.SizeOf(association)))
+                        throw new Win32Exception(Marshal.GetLastWin32Error());
+
+                    StartupInfo startup = new StartupInfo { Size = (uint)Marshal.SizeOf(typeof(StartupInfo)) };
+                    // 挂起创建，先加入 Job 再恢复，避免 QQ 在加入监管前创建子进程。
+                    StringBuilder command = new StringBuilder("\"" + executable + "\" " + arguments);
+                    if (!CreateProcess(executable, command, IntPtr.Zero, IntPtr.Zero, false,
+                        0x00000004 | 0x08000000, IntPtr.Zero, workingDirectory, ref startup, out ProcessInformation process))
+                        throw new Win32Exception(Marshal.GetLastWin32Error());
+
+                    bool assigned = false;
+                    try
+                    {
+                        if (IsStopRequested())
+                        {
+                            TerminateProcess(process.Process, 0);
+                            return;
+                        }
+                        if (!AssignProcessToJobObject(jobHandle, process.Process)) throw new Win32Exception(Marshal.GetLastWin32Error());
+                        assigned = true;
+                        if (IsStopRequested())
+                        {
+                            TerminateJobObject(jobHandle, 0);
+                            return;
+                        }
+                        if (ResumeThread(process.Thread) == uint.MaxValue)
+                        {
+                            if (IsStopRequested()) return;
+                            throw new Win32Exception(Marshal.GetLastWin32Error());
+                        }
+
+                        HashSet<uint> clients = new HashSet<uint>();
+                        bool jobEmpty = false;
+                        while (true)
+                        {
+                            if (!GetQueuedCompletionStatus(port, out uint message, out UIntPtr key, out IntPtr processId, Infinite))
+                                throw new Win32Exception(Marshal.GetLastWin32Error());
+                            if (message == ActiveProcessZero)
+                            {
+                                jobEmpty = true;
+                                if (clients.Count == 0) return;
+                            }
+                            uint id = unchecked((uint)processId.ToInt64());
+                            if (message == NewProcess && id != process.ProcessId && WatchClient(id, port)) clients.Add(id);
+                            if (message == ClientExited && clients.Remove(id) && clients.Count == 0)
+                            {
+                                if (jobEmpty) return;
+                                // conhost 与 crashpad 等辅助进程不能阻止 QQ 退出后的清理。
+                                if (!TerminateJobObject(jobHandle, 0)) throw new Win32Exception(Marshal.GetLastWin32Error());
+                            }
+                        }
+                    }
+                    catch
+                    {
+                        // 启动或监管失败不能遗留挂起进程；清理后继续报告原始错误。
+                        if (assigned) TerminateJobObject(jobHandle, 1);
+                        else TerminateProcess(process.Process, 1);
+                        throw;
+                    }
+                    finally
+                    {
+                        CloseHandle(process.Thread);
+                        CloseHandle(process.Process);
+                    }
                 }
                 finally
                 {
-                    CloseHandle(process.Thread);
-                    CloseHandle(process.Process);
+                    lock (gate)
+                    {
+                        job = null;
+                    }
                 }
+            }
+        }
+
+        private bool IsStopRequested()
+        {
+            lock (gate)
+            {
+                return stopRequested;
             }
         }
 

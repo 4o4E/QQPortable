@@ -18,12 +18,18 @@
     <Reference Include="System.IO.Compression.FileSystem" />
     <Reference Include="System.Net.Http" />
     <Reference Include="Microsoft.CSharp" />
+    <Compile Include="..\QQPortable.Shared\*.cs" Link="Shared\%(Filename)%(Extension)" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="..\..\assets\launcher.ico" LogicalName="launcher.ico" />
     <EmbeddedResource Include="Assets\launcher\QQPortable.exe" LogicalName="QQPortable.exe" />
     <EmbeddedResource Include="Assets\launcher\NapCatWinBootMain.exe" LogicalName="NapCatWinBootMain.exe" />
     <EmbeddedResource Include="Assets\launcher\NapCatWinBootHook.dll" LogicalName="NapCatWinBootHook.dll" />
+    <EmbeddedResource Include="Assets\settings\QQPortable.setting.exe" LogicalName="QQPortable.setting.exe" />
+    <EmbeddedResource Include="Assets\plugins\qqportable_settings\manifest.json" LogicalName="plugin.manifest.json" />
+    <EmbeddedResource Include="Assets\plugins\qqportable_settings\src\main.cjs" LogicalName="plugin.main.cjs" />
+    <EmbeddedResource Include="Assets\plugins\qqportable_settings\src\preload.cjs" LogicalName="plugin.preload.cjs" />
+    <EmbeddedResource Include="Assets\plugins\qqportable_settings\src\renderer.mjs" LogicalName="plugin.renderer.mjs" />
     <EmbeddedResource Include="Assets\tools\7za.exe" LogicalName="7za.exe" />
     <EmbeddedResource Include="Assets\tools\7za-License.txt" LogicalName="7za-License.txt" />
   </ItemGroup>

@@ -6,10 +6,10 @@
 
 为 Windows 10/11 x64 提供 QQ 便携安装器和启动器：
 
-- 安装器是单个 `QQPortable.Installer.exe`，内嵌启动器、NapCat 注入文件和 7-Zip。
-- 安装后的根目录只有 `QQPortable.exe`、`QQ`、`LiteLoader` 和 `Launcher`。
-- 启动器负责准备 LiteLoader/NapCat 入口、启动 QQ，并监管本次启动的进程。
-- 不默认创建快捷方式，不修改 QQ 的聊天数据，不捆绑插件。
+- 安装器是单个 `QQPortable.Installer.exe`，内嵌启动器、设置程序、控制插件、NapCat 注入文件和 7-Zip。
+- 安装后的根目录包含 `QQPortable.exe`、`QQPortable.setting.exe`、`QQPortable.json`、`QQ`、`LiteLoader` 和 `Launcher`。
+- 启动器负责准备 LiteLoader/NapCat 入口、同步开机自启、启动 QQ、监管本次启动的进程，并处理 QQ 左下角“更多”菜单发起的重启。
+- 不默认创建快捷方式，不修改 QQ 的聊天数据，只附带一个 QQPortable 控制插件，不附带其他插件。
 
 ## 目录
 
@@ -20,11 +20,14 @@ QQPortable\
   QQPortable.sln
   build.ps1                    构建启动器、复制内嵌资源、构建安装器
   assets\
-    launcher.ico               启动器和安装器图标
+    launcher.ico               启动器、设置程序和安装器图标
     launcher\                  NapCatWinBootMain.exe / NapCatWinBootHook.dll
+    plugins\qqportable_settings\ 随安装器附带的 LiteLoader 控制插件
     tools\                     7za.exe / 7za-license
   src\
     QQPortable.Launcher\       net48 单文件启动器
+    QQPortable.Settings\       net48 WinForms 设置程序
+    QQPortable.Shared\         配置读写和开机自启注册表同步
     QQPortable.Installer\      net48 WinForms 安装器
     QQPortable.Tests\          net48 xUnit 测试
   docs\architecture.md         详细架构和流程
@@ -44,16 +47,18 @@ dotnet test QQPortable.sln -c Release --no-restore
 
 1. 构建 `QQPortable.Launcher`。
 2. 把启动器、NapCat 文件和 `7za` 复制到 `src\QQPortable.Installer\Assets`。
-3. 构建 `QQPortable.Installer`，把这些文件作为嵌入资源打进单个 EXE。
+3. 构建 `QQPortable.Settings`，把 `QQPortable.setting.exe` 和控制插件文件复制到安装器资源目录。
+4. 构建 `QQPortable.Installer`，把这些文件作为嵌入资源打进单个 EXE。
 
 产物：
 
 ```text
 src\QQPortable.Launcher\bin\Release\net48\QQPortable.exe
+src\QQPortable.Settings\bin\Release\net48\QQPortable.setting.exe
 src\QQPortable.Installer\bin\Release\net48\QQPortable.Installer.exe
 ```
 
-两个项目都是 .NET Framework 4.8，使用传统 `.sln`。不要改成 `.slnx`。
+所有项目都是 .NET Framework 4.8，使用传统 `.sln`。不要改成 `.slnx`。
 
 ## 发布
 
@@ -64,9 +69,9 @@ git tag v<version>
 git push origin v<version>
 ```
 
-推送 `v*` 标签会运行 `.github/workflows/release.yml`：构建、测试、创建 GitHub Release，并上传安装器、启动器、第三方说明和 7-Zip 许可证。
+推送 `v*` 标签会运行 `.github/workflows/release.yml`：构建、测试、创建 GitHub Release，并上传安装器、启动器、设置程序、控制插件压缩包、第三方说明和 7-Zip 许可证。
 
-同时更新两个项目的 `<Version>`，提交信息使用 Conventional Commits：
+同时更新启动器、设置程序和安装器三个项目的 `<Version>`，提交信息使用 Conventional Commits：
 
 ```text
 type(scope): 中文说明
@@ -76,6 +81,8 @@ type(scope): 中文说明
 
 ## 启动器契约
 
+- 读取便携根目录 `QQPortable.json`；缺失时写入默认值，按 `autoStart` 同步当前用户 Run 项。配置不是有效 JSON 时显示错误并退出。
+- 按便携根目录生成单实例互斥量；已有启动器时激活现有 QQ 并退出，不创建第二个会话。
 - 先检查目标便携目录的 `QQ.exe` 是否正在运行；已运行则激活窗口并退出，不启动第二份。
 - 找到最新的 `QQ\versions\*\resources\app\package.json`。
 - 写入 `Launcher\runtime\qqnt.json`，设置 `package.main` 为 `./loadNapCat.js`。
@@ -84,8 +91,11 @@ type(scope): 中文说明
 - 通过 Windows Job 以挂起方式启动 `NapCatWinBootMain.exe`，加入 Job 后再恢复，避免遗漏早期子进程。
 - 只跟踪本次 Job 中的 QQ 进程。全部 QQ 客户端退出后，结束本次 NapCat、控制台宿主和启动器；关闭窗口隐藏到托盘不会触发清理。
 - 不按进程名称结束其他目录的 QQ 会话。
+- 启动器创建命名事件 `Local\QQPortable.Restart.<hash>`。收到重启请求后结束当前 Job，等旧会话完全退出，再启动一个新会话；新会话仍执行上述 NapCat/LiteLoader 注入。
+- `--restart` 只打开命名事件并置位，然后退出；事件不存在时显示错误，不启动 QQ。
+- 不创建自己的托盘图标。重启入口由控制插件加入 QQ 左下角“更多”菜单的“设置”下方。
 
-`--prepare-only` 只生成运行时配置并退出，不启动 QQ。
+`--prepare-only` 只生成运行时配置并退出，不启动 QQ，也不修改注册表。
 
 ## 安装器契约
 
@@ -94,13 +104,15 @@ type(scope): 中文说明
 - 支持 `GITHUB_TOKEN` 或 `GH_TOKEN` 提高 API 额度。
 - QQ 安装包先尝试直接解压；找不到 `QQ.exe` 时扫描内层 7z 签名再解压；最后复制包含 `QQ.exe` 的目录。
 - LiteLoader 的兼容补丁必须匹配当前目标版本；匹配失败时直接报错，不能静默跳过。
-- 安装完成后不创建快捷方式，不改动 `LiteLoader\plugins` 内容。
+- 写入 `QQPortable.setting.exe` 和默认 `QQPortable.json`（`autoStart` 为 `false`），并安装 `LiteLoader\plugins\qqportable_settings` 控制插件。
+- 安装完成后不创建快捷方式，不改动用户自行安装的其他 `LiteLoader\plugins` 内容。
 
 ## UI 与高 DPI
 
-- 安装器是 WinForms，必须保持高 DPI 可用。
-- 使用嵌入的 per-monitor V2 清单；窗口创建后通过 `GetDpiForWindow` 读取实际 DPI，手动缩放控件尺寸。不要依赖外部 `.exe.config` 提供 DPI 配置，发布包只有单个 EXE。
+- 安装器和 `QQPortable.setting.exe` 都是 WinForms，必须保持高 DPI 可用。
+- 使用嵌入的 per-monitor V2 清单；窗口创建后通过 `GetDpiForWindow` 读取实际 DPI，手动缩放控件尺寸。不要依赖外部 `.exe.config` 提供 DPI 配置，安装器本身只有单个 EXE。
 - 字体按点数由系统渲染，缩放控件尺寸时不要放大字体。
+- 设置程序的说明、配置路径和错误状态必须能换行，不能使用会被窗口宽度裁切的固定像素宽度。
 - 安装按钮、底部提示、状态文字和完成页摘要必须随窗口宽度铺满，不能被固定像素宽度裁切。
 - 标题栏和任务栏使用嵌入的企鹅图标，不要依赖默认 WinForms 图标。
 - 修改 UI 后在 100%、150% 和 200% 缩放下检查文字、按钮和窗口默认尺寸。
@@ -111,14 +123,18 @@ type(scope): 中文说明
 - 不使用 mock、假实现或只为测试通过的 workaround。
 - 不保留调试日志、临时环境变量开关、诊断代码或未使用的辅助方法。
 - 新增功能先判断是否属于现有文件；避免为小改动建立平行抽象。
-- 二进制资源必须通过 `build.ps1` 更新，不手工编辑内嵌资源。
-- 改动启动器或安装器资源时，提交对应的 `src\QQPortable.Installer\Assets\launcher\QQPortable.exe`，保证安装器内嵌版本与源码一致。
+- `QQPortable.Shared` 的源码通过 `<Compile Include>` 链接进启动器、设置程序和安装器，不生成额外 DLL。配置字段和 Run 项值名只在这里定义。
+- 控制插件通过 `QQPortable.setting.exe --apply` 同步注册表，不在 JavaScript 中复制 Run 项逻辑。
+- 二进制资源必须通过 `build.ps1` 更新，不手工编辑内嵌资源；插件的嵌入副本由 `build.ps1` 从 `assets\plugins` 复制。
+- 改动启动器、设置程序或控制插件时，提交对应的 `src\QQPortable.Installer\Assets\launcher\QQPortable.exe`、`Assets\settings\QQPortable.setting.exe` 和 `Assets\plugins\qqportable_settings`，保证安装器内嵌版本与源码一致。
 
 ## 验证
 
-- 修改安装器逻辑：运行 `dotnet test`，用临时空目录实际安装一次，检查根目录结构和启动。
+- 修改安装器逻辑：运行 `dotnet test`，用临时空目录实际安装一次，检查根目录包含 `QQPortable.setting.exe`、`QQPortable.json` 和 `LiteLoader\plugins\qqportable_settings`，并检查启动。
 - 修改启动器进程监管：在独立临时目录启动真实 QQ，检查关闭窗口隐藏到托盘不触发清理、完整退出后不残留 NapCat/控制台宿主。不要使用现有用户目录作为测试目录。
-- 修改 UI：启动真实窗体，检查 DPI、窗口尺寸、按钮文字、图标和控件边界。
+- 修改重启：在真实 QQ 中点击左下角“更多”菜单的“重启 QQ”，记录重启前后的 QQ、NapCat 进程数量，确认旧进程树清空、只有一个新会话、插件重新加载。
+- 修改开机自启：分别用 `QQPortable.setting.exe` 和插件设置页切换开关，检查 `HKCU\...\Run` 和 `StartupApproved\Run`；确认不需要管理员权限。
+- 修改 UI：启动真实窗体，检查 DPI、窗口尺寸、按钮文字、图标和控件边界；设置程序至少检查 100%、150% 和 200%。
 - 修改版本目录：分别验证正常 API 路径和限流回退路径，并确认直链可访问。
 - 不要通过运行测试重复确认用户已经报告过的错误；测试只用于验证修复。
 
