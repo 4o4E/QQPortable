@@ -81,7 +81,11 @@ The settings program embeds a per-monitor V2 manifest, reads the actual DPI with
 
 `LiteLoader\plugins\qqportable_settings` is the only bundled plugin. Its manifest uses version 4 and injects `main`, `preload`, and `renderer`.
 
-The renderer listens for clicks on the bottom-left three-line “更多” button during the capture phase. Before QQ opens the menu, it finds the button's Vue component instance and inserts a “重启 QQ” item into the `menuItem` array immediately after “设置”. QQ's own context-menu component renders the item, its icon, and its position. Clicking the item invokes a preload IPC that spawns `QQPortable.exe --restart`; the launcher owns the actual session restart.
+The renderer listens for clicks on the bottom-left three-line “更多” button during the capture phase. It checks all component instances recorded on the current button for a `menuItem` array containing “设置”. If the button's bridge is missing or does not contain the menu owner, it follows accessible Vue roots through rendered components, child VNodes, and active Suspense branches, matching the component's element to the current button. Traversal deduplicates components and VNodes; it does not retain unloaded components or scan unrelated object properties.
+
+Before QQ opens the menu, the renderer ensures exactly one “重启 QQ” item immediately after “设置”, including after the array is reordered or recreated. A DOM observer also handles button/menu creation and replacement, batching related changes into the next animation frame; ordinary chat updates do not trigger component-tree discovery. The observer and click handler are removed when the page is destroyed. If a user opens the menu while its data cannot be located, the renderer reports one QQPortable error for that continuous failure and retries on subsequent menu changes or clicks. It does not suppress QQ's native menu or restore entries hidden by other plugins.
+
+QQ's own context-menu component renders the item, its icon, and its position at the current display scale. Clicking the item invokes the existing preload IPC that spawns `QQPortable.exe --restart`; the launcher owns the actual session restart.
 
 The settings page is created with `onSettingWindowCreated`. The preload exposes `getConfig`, `setAutoStart`, and `restartQQ`. Saving writes the JSON with unknown fields preserved, then runs `QQPortable.setting.exe --apply`; if that fails, the plugin rolls the JSON back and reports the error.
 

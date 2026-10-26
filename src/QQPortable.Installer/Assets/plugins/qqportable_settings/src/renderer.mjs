@@ -33,33 +33,145 @@ function injectStyle() {
   document.head.appendChild(style);
 }
 
+const MORE_SELECTOR = ".func-menu-more-component";
+const MENU_SELECTOR = ".q-context-menu.more-menu";
+
+// LiteLoader may miss a component when recording DOM bridges. Walk Vue's actual
+// rendered tree instead of assuming the first recorded instance owns the menu.
+function findMoreMenuItems(more) {
+  const visitedComponents = new Set();
+  const visitedVnodes = new Set();
+  const pending = [];
+
+  function visitComponent(component) {
+    if (!component || component.isUnmounted || visitedComponents.has(component)) return;
+    visitedComponents.add(component);
+    const items = component.ctx?.menuItem;
+    if (
+      component.vnode?.el === more &&
+      Array.isArray(items) &&
+      items.some((item) => item?.label === "设置")
+    ) {
+      return items;
+    }
+    if (component.subTree) pending.push(component.subTree);
+  }
+
+  function visitTree() {
+    while (pending.length) {
+      const vnode = pending.pop();
+      if (!vnode || visitedVnodes.has(vnode)) continue;
+      visitedVnodes.add(vnode);
+      if (Array.isArray(vnode)) {
+        pending.push(...vnode);
+        continue;
+      }
+      const items = visitComponent(vnode.component);
+      if (items) return items;
+      if (Array.isArray(vnode.children)) pending.push(...vnode.children);
+      if (vnode.suspense?.activeBranch) pending.push(vnode.suspense.activeBranch);
+    }
+  }
+
+  for (const component of more.__VUE__ ?? []) {
+    const items = visitComponent(component);
+    if (items) return items;
+  }
+  for (let element = more; element; element = element.parentElement) {
+    for (const component of element.__VUE__ ?? []) {
+      const items = visitComponent(component.root ?? component);
+      if (items) return items;
+    }
+  }
+  const nearbyItems = visitTree();
+  if (nearbyItems) return nearbyItems;
+
+  // A sibling can be the only recorded element of the same Vue root.
+  for (const element of document.querySelectorAll(".vue-component")) {
+    for (const component of element.__VUE__ ?? []) {
+      const items = visitComponent(component.root ?? component);
+      if (items) return items;
+    }
+    const items = visitTree();
+    if (items) return items;
+  }
+}
+
 function ensureMoreMenuRestartItem(items) {
-  if (!Array.isArray(items)) return;
-  if (items.some((item) => item?.label === RESTART_LABEL)) return;
   const settingsIndex = items.findIndex((item) => item?.label === "设置");
-  if (settingsIndex < 0) return;
-  items.splice(settingsIndex + 1, 0, {
+  const restartIndex = items.findIndex((item) => item?.label === RESTART_LABEL);
+  if (
+    restartIndex === settingsIndex + 1 &&
+    !items.some((item, index) => index !== restartIndex && item?.label === RESTART_LABEL)
+  ) {
+    return;
+  }
+  // QQ can replace or reorder the array. Repair only our item, preserving all
+  // native entries and the visibility decisions made by other plugins.
+  const restartItem = restartIndex < 0 ? {
     label: RESTART_LABEL,
     icon: "refresh",
-    handler: () => {
-      window.qqPortableSettings?.restartQQ?.();
-    },
+    handler: () => window.qqPortableSettings.restartQQ(),
     dtItemType: 0,
     when: true,
-  });
+  } : items[restartIndex];
+  for (let index = items.length - 1; index >= 0; index--) {
+    if (items[index]?.label === RESTART_LABEL) items.splice(index, 1);
+  }
+  items.splice(items.findIndex((item) => item?.label === "设置") + 1, 0, restartItem);
 }
 
 function initMoreMenuRestart() {
-  document.addEventListener(
-    "click",
-    (event) => {
-      const more = event.target?.closest?.(".func-menu-more-component");
-      if (!more) return;
-      const instance = more.__VUE__?.[0];
-      ensureMoreMenuRestartItem(instance?.ctx?.menuItem);
-    },
-    true,
-  );
+  let failed = false;
+  let frame = null;
+
+  function prepare(more, reportFailure) {
+    const items = findMoreMenuItems(more);
+    if (!items) {
+      if (reportFailure && !failed) {
+        console.error("[QQPortable] 无法定位“更多”菜单中包含“设置”的组件数据；组件就绪或再次打开菜单时将重新处理。");
+        failed = true;
+      }
+      return;
+    }
+    ensureMoreMenuRestartItem(items);
+    failed = false;
+  }
+
+  function onClick(event) {
+    const more = event.target?.closest?.(MORE_SELECTOR);
+    if (more) prepare(more, true);
+  }
+
+  function prepareCurrent() {
+    frame = null;
+    const more = document.querySelector(MORE_SELECTOR);
+    if (more) prepare(more, !!document.querySelector(MENU_SELECTOR));
+  }
+
+  function affectsMenu(node) {
+    return node.nodeType === Node.ELEMENT_NODE &&
+      (node.matches(`${MORE_SELECTOR}, ${MENU_SELECTOR}`) ||
+        !!node.querySelector(`${MORE_SELECTOR}, ${MENU_SELECTOR}`));
+  }
+
+  // Observe menu creation/replacement, not message updates. The next frame lets
+  // Vue finish mounting before discovery; every click also retries synchronously.
+  const observer = new MutationObserver((records) => {
+    if (frame !== null) return;
+    if (records.some((record) =>
+      [...record.addedNodes, ...record.removedNodes].some(affectsMenu))) {
+      frame = requestAnimationFrame(prepareCurrent);
+    }
+  });
+  observer.observe(document, { childList: true, subtree: true });
+  document.addEventListener("click", onClick, true);
+  frame = requestAnimationFrame(prepareCurrent);
+  window.addEventListener("pagehide", () => {
+    observer.disconnect();
+    document.removeEventListener("click", onClick, true);
+    if (frame !== null) cancelAnimationFrame(frame);
+  }, { once: true });
 }
 
 function onSettingWindowCreated(view) {
